@@ -1,0 +1,58 @@
+jobs:  
+- job:  github_poc
+  pool:
+    vmImage: 'Ubuntu-18.04'
+  steps:
+    - task: DownloadSecureFile@1
+      name: 'releasenote'
+      inputs:
+        secureFile: 'release_note_BBG_loans.sh'
+    - script: |
+        mkdir test_dir
+        sh $(releasenote.secureFilePath) $(Build.BuildNumber) v1.0 develop $(web-url) $(api-url)
+        cp release_note.html test_dir/
+        ls -lrt test_dir/
+      displayName: 'Release note creation' 
+      enabled: false
+
+    - bash: |
+       cd Release_note
+       sh release_script.sh $(Build.BuildNumber) v1.0 develop $(web-url) $(api-url)
+       ls -lrt
+       pwd
+      displayName: 'Release note creation'
+      enabled: true
+
+    - task: CopyFiles@2
+      displayName: 'Stage Artifacts'
+      inputs:
+        SourceFolder: Release_note
+        TargetFolder: '$(build.artifactstagingdirectory)/html'
+      enabled: true
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Pipeline.Workspace)'
+        artifact: 'release_note.html'
+        publishLocation: 'pipeline'
+      enabled: true
+        
+    - task: PublishHtmlReport@1
+      inputs:
+        reportDir: '$(build.artifactstagingdirectory)/html/release_note.html'
+      enabled: false
+
+    - task: ArtifactoryGenericUpload@2
+      inputs:
+        artifactoryService: 'Jfrog'
+        specSource: 'taskConfiguration'
+        fileSpec: |
+          {
+            "files": [
+              {
+                "pattern": "$(build.artifactstagingdirectory)/html/*.html*",
+                "target": "bbgloans/Release_Notes/develop/$(Build.BuildNumber)/"
+              }
+            ]
+          }
+        failNoOp: true
